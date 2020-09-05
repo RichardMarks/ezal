@@ -19,7 +19,7 @@ CFLAGS ?= -DDEBUG -O0 -MMD -MP -g $(shell pkg-config \
 .PHONY: clean
 .PHONY: install
 .PHONY: uninstall
-ezal.a: ezal.o
+libezal.a: ezal.o
 	@echo "Creating EZAL Static Library"
 	@ar -rc $@ $^
 	@ranlib $@
@@ -28,14 +28,14 @@ ezal.o: ezal.c
 	@$(CC) -c $^ -o $@ $(CFLAGS)
 clean:
 	@echo "Cleaning EZAL Project"
-	@$(RM) ezal.o ezal.a ezal.d
+	@$(RM) ezal.o libezal.a ezal.d
 install:
 	@echo "Installing EZAL"
 	@mkdir -p ~/ezal/include
 	@mkdir -p ~/ezal/lib
 	@cp ezal.h ~/ezal/include/
 	@cp ezal.o ~/ezal/lib/
-	@cp ezal.a ~/ezal/lib/
+	@cp libezal.a ~/ezal/lib/
 uninstall:
 	@echo "Uninstalling EZAL"
 	@$(RM) -r ~/ezal
