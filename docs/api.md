@@ -32,11 +32,22 @@ This structure wraps all the Allegro variables and input tracking variables used
 + `ALLEGRO_FONT* font;`
 + `ALLEGRO_EVENT_QUEUE* event_queue;`
 + `ALLEGRO_EVENT event;`
-+ `unsigned char key[ALLEGRO_KEY_MAX];`
-+ `float mouseX;`
-+ `float mouseY;`
-+ `unsigned int mouseButton;`
-+ `unsigned char mouseState;`
++ `ALLEGRO_COLOR screen_color;`
++ `ALLEGRO_COLOR border_color;`
+
+```c
+struct EZALInputContext
+```
+This structure holds input tracking variables for the runtime
+
++ `unsigned char key[ALLEGRO_KEY_MAX];` - tracks current key state
++ `unsigned char last_key;` - tracks last key pressed and released
++ `unsigned char mouse_state;` - tracks current mouse state
++ `unsigned int mouse_x;` - tracks mouse horizontal x axis coordinate
++ `unsigned int mouse_y;` - tracks mouse vertical y axis coordinate
++ `unsigned int mouse_button;` - tracks the mouse button pressed
++ `int relative_mouse_x;` - tracks how far the mouse moved horizontally
++ `int relative_mouse_y;` - tracks how far the mouse moved vertically
 
 ```c
 struct EZALRuntimeContext
@@ -45,6 +56,7 @@ This structure holds pointers to the other data structures and some other data t
 
 + `struct EZALConfig* cfg;` - pointer to configuration data
 + `struct EZALAllegroContext* al_ctx;` - pointer to Allegro data
++ `struct EZALInputContext* input;` - pointer to the input data
 + `void* user[EZAL_MAX_USER_DATA_PTRS];` - array of pointers to user data
 > \*\* There are other fields that you do not usually need to access.
 
@@ -66,6 +78,33 @@ int ezal_start(
   EZALFPTR render,
   struct EZALConfig* cfg
 );
+```
+
+If your project has a need to separate initialization and runtime to perform additional operations in the `main()` function or to restructure the project differently, there is an alternate function called `ezal_init` that you can use. The params are the same as `ezal_start` except the function returns a pointer to an `EZALRuntimeAdapter` data structure which provides a `start()` function, and a pointer to the `EZALRuntimeContext` data structure.
+
+```c
+struct EZALRuntimeAdapter* ezal_init(
+  const char* title,
+  EZALFPTR create,
+  EZALFPTR destroy,
+  EZALFPTR update,
+  EZALFPTR render,
+  struct EZALConfig* cfg);
+```
+
+> A minimal example:
+```c
+struct EZALRuntimeAdapter* rta = ezal_init(
+    "EZAL Init/Runtime Separation",
+    &my_create_fn,
+    &my_destroy_fn,
+    &my_update_fn,
+    &my_render_fn,
+    &cfg);
+
+  rta->rt_ctx->al_ctx->screen_color = al_map_rgb(255, 64, 0);
+
+  return rta->start(rta);
 ```
 
 To stop the runtime and exit the program, call the `ezal_stop` function and pass the `ctx` from the `EZAL_FN` function.
@@ -121,7 +160,7 @@ if (EZAL_KEY(ALLEGRO_KEY_ESCAPE))
 You do not *have* to use the `EZAL_KEY` macro, and you could write the if statement could be written like this:
 
 ```c
-if (ctx->al_ctx->key[ALLEGRO_KEY_ESCAPE])
+if (ctx->input->key[ALLEGRO_KEY_ESCAPE])
 {
   ezal_stop(ctx);
 }
