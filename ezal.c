@@ -30,35 +30,31 @@ struct EZALPrivateData {
   struct EZALConfig cfg;
   struct EZALAllegroContext al_ctx;
   struct EZALRuntimeContext rt_ctx;
+  struct EZALInputContext input;
 
-  float x;
-  float y;
-  float w;
-  float h;
+  int x;
+  int y;
+  int w;
+  int h;
 
-  bool (*update)(struct EZALPrivateData*);
-  bool (*render)(struct EZALPrivateData*);
-  bool (*present)(struct EZALPrivateData*);
-  bool (*halt)(struct EZALPrivateData*);
-  bool (*resize)(struct EZALPrivateData*);
+  void (*update)(struct EZALPrivateData*);
+  void (*render)(struct EZALPrivateData*);
+  void (*present)(struct EZALPrivateData*);
+  void (*halt)(struct EZALPrivateData*);
+  void (*resize)(struct EZALPrivateData*);
 };
 
-typedef bool (*EZALPFPTR)(struct EZALPrivateData*);
-
-// ezal private function pointer targets (EZALPFPTR)
-bool ezal_private_halt(struct EZALPrivateData* pd)
+// ezal private function pointer targets
+void ezal_private_halt(struct EZALPrivateData* pd)
 {
   pd->rt_ctx.is_running = false;
-  pd->rt_ctx.did_tick = false;
   pd->rt_ctx.should_redraw = false;
-
-  return true;
 }
 
-bool ezal_private_resize(struct EZALPrivateData* pd)
+void ezal_private_resize(struct EZALPrivateData* pd)
 {
-  int display_width = pd->al_ctx.event.display.width;
-  int display_height = pd->al_ctx.event.display.height;
+  int display_width = al_get_display_width(pd->al_ctx.display);
+  int display_height = al_get_display_height(pd->al_ctx.display);
 
   pd->cfg.width = display_width;
   pd->cfg.height = display_height;
@@ -84,92 +80,79 @@ bool ezal_private_resize(struct EZALPrivateData* pd)
     pd->x = (display_width - pd->w) * 0.5f;
     pd->y = (display_height - pd->h) * 0.5f;
   }
-
-  return true;
 }
 
-bool ezal_private_update(struct EZALPrivateData* pd)
+void ezal_private_update(struct EZALPrivateData* pd)
 {
   al_wait_for_event(pd->al_ctx.event_queue, &pd->al_ctx.event);
-
-  pd->rt_ctx.did_tick = false;
 
   switch (pd->al_ctx.event.type)
   {
     case ALLEGRO_EVENT_TIMER: {
-      pd->rt_ctx.did_tick = true;
       pd->rt_ctx.should_redraw = true;
+
+      pd->rt_ctx.update(&pd->rt_ctx);
+
       for (int i = 0; i < ALLEGRO_KEY_MAX; i++) {
-        pd->al_ctx.key[i] &= 1;
+        pd->input.key[i] &= 1;
       }
-      pd->al_ctx.mouseState &= 1;
+      pd->input.mouse_state &= 1;
     } break;
     case ALLEGRO_EVENT_KEY_DOWN: {
-      pd->al_ctx.key[pd->al_ctx.event.keyboard.keycode] = 1 | 2;
+      pd->input.key[pd->al_ctx.event.keyboard.keycode] = 1 | 2;
     } break;
     case ALLEGRO_EVENT_KEY_UP: {
-      pd->al_ctx.key[pd->al_ctx.event.keyboard.keycode] &= 2;
+      pd->input.key[pd->al_ctx.event.keyboard.keycode] &= 2;
     } break;
     case ALLEGRO_EVENT_MOUSE_AXES: {
-      pd->al_ctx.mouseX = pd->al_ctx.event.mouse.x;
-      pd->al_ctx.mouseY = pd->al_ctx.event.mouse.y;
+      pd->input.mouse_x = pd->al_ctx.event.mouse.x;
+      pd->input.mouse_y = pd->al_ctx.event.mouse.y;
     } break;
     case ALLEGRO_EVENT_MOUSE_BUTTON_DOWN: {
-      pd->al_ctx.mouseState = 1 | 2;
-      pd->al_ctx.mouseButton = pd->al_ctx.event.mouse.button;
+      pd->input.mouse_state = 1 | 2;
+      pd->input.mouse_button = pd->al_ctx.event.mouse.button;
     } break;
     case ALLEGRO_EVENT_MOUSE_BUTTON_UP: {
-      pd->al_ctx.mouseState &= 2;
-      pd->al_ctx.mouseButton = pd->al_ctx.event.mouse.button;
+      pd->input.mouse_state &= 2;
+      pd->input.mouse_button = pd->al_ctx.event.mouse.button;
     } break;
     case ALLEGRO_EVENT_DISPLAY_CLOSE: {
       pd->halt(pd);
     } break;
     case ALLEGRO_EVENT_DISPLAY_RESIZE: {
+      if (al_acknowledge_resize(pd->al_ctx.event.display.source))
+      {
+        pd->resize(pd);
+      }
+    } break;
+    case ALLEGRO_EVENT_DISPLAY_SWITCH_IN: {
       pd->resize(pd);
     } break;
     default: break;
   }
-
-  return pd->rt_ctx.did_tick;
 }
 
-bool ezal_private_render_default(struct EZALPrivateData* pd)
+void ezal_private_render_default(struct EZALPrivateData* pd)
 {
-  if (pd->rt_ctx.should_redraw && al_is_event_queue_empty(
-    pd->al_ctx.event_queue))
-  {
-    pd->rt_ctx.should_redraw = false;
-    al_clear_to_color(al_map_rgb(0, 0, 0));
-    return true;
-  }
-  return false;
+  al_clear_to_color(pd->al_ctx.screen_color);
 }
 
-bool ezal_private_present_default(struct EZALPrivateData* pd)
+void ezal_private_present_default(struct EZALPrivateData* pd)
 {
   al_flip_display();
-  return true;
 }
 
-bool ezal_private_render_scaled(struct EZALPrivateData* pd)
+void ezal_private_render_scaled(struct EZALPrivateData* pd)
 {
-  if (pd->rt_ctx.should_redraw && al_is_event_queue_empty(
-    pd->al_ctx.event_queue))
-  {
-    pd->rt_ctx.should_redraw = false;
-    al_set_target_bitmap(pd->al_ctx.buffer);
-    al_clear_to_color(al_map_rgb(0, 0, 0));
-    return true;
-  }
-  return false;
+  al_set_target_bitmap(pd->al_ctx.buffer);
+  al_clear_to_color(pd->al_ctx.screen_color);
 }
 
-bool ezal_private_present_scaled(struct EZALPrivateData* pd)
+void ezal_private_present_scaled(struct EZALPrivateData* pd)
 {
   al_set_target_backbuffer(pd->al_ctx.display);
   // rgb(51 102 153)
-  al_clear_to_color(al_map_rgb(51, 102, 153));
+  al_clear_to_color(pd->al_ctx.border_color);
   // al_clear_to_color(al_map_rgb(0, 0, 0));
   al_draw_scaled_bitmap(
     pd->al_ctx.buffer,
@@ -182,7 +165,7 @@ bool ezal_private_present_scaled(struct EZALPrivateData* pd)
     pd->w,
     pd->h,
     0);
-  return true;
+  al_flip_display();
 }
 
 // private api functions
@@ -213,7 +196,7 @@ bool ezal_private_init_allegro(struct EZALPrivateData* pd)
 
   if (pd->cfg.enable_keyboard)
   {
-    memset(pd->al_ctx.key, 0, sizeof(pd->al_ctx.key));
+    memset(pd->input.key, 0, sizeof(pd->input.key));
     if (!al_install_keyboard())
     {
       fprintf(stderr, "al_install_keyboard failed.\n");
@@ -266,7 +249,7 @@ bool ezal_private_init_allegro(struct EZALPrivateData* pd)
 
   al_set_new_display_flags(pd->cfg.fullscreen
     ? ALLEGRO_FULLSCREEN_WINDOW
-    : ALLEGRO_WINDOWED);
+    : ALLEGRO_RESIZABLE);
 
   pd->al_ctx.display = 0;
   ALLEGRO_DISPLAY* display = al_create_display(
@@ -322,6 +305,13 @@ bool ezal_private_init_allegro(struct EZALPrivateData* pd)
   }
   if (pd->cfg.debug) { fprintf(stdout, "al_init_image_addon\n"); }
 
+  if (!al_init_primitives_addon())
+  {
+    fprintf(stderr, "al_init_primitives_addon failed.\n");
+    return false;
+  }
+  if (pd->cfg.debug) { fprintf(stdout, "al_init_primitives_addon\n"); }
+
   if (pd->cfg.enable_audio)
   {
     if (!al_init_acodec_addon())
@@ -349,6 +339,9 @@ bool ezal_private_init_allegro(struct EZALPrivateData* pd)
   }
   if (pd->cfg.debug) { fprintf(stdout, "al_create_builtin_font\n"); }
   pd->al_ctx.font = font;
+
+  pd->al_ctx.border_color = al_map_rgb(0, 0, 0);
+  pd->al_ctx.screen_color = al_map_rgb(51, 102, 153);
 
   if (pd->cfg.enable_keyboard)
   {
@@ -394,6 +387,7 @@ bool ezal_private_init_runtime(
 {
   pd->rt_ctx.cfg = &pd->cfg;
   pd->rt_ctx.al_ctx = &pd->al_ctx;
+  pd->rt_ctx.input = &pd->input;
 
   pd->rt_ctx.create = &ezal_runtime_do_nothing;
   pd->rt_ctx.destroy = &ezal_runtime_do_nothing;
@@ -429,6 +423,7 @@ bool ezal_private_init_runtime(
 
 bool ezal_private_init_pd(struct EZALPrivateData* pd)
 {
+  pd->resize = &ezal_private_resize;
   pd->halt = &ezal_private_halt;
   pd->update = &ezal_private_update;
   pd->render = &ezal_private_render_default;
@@ -527,15 +522,15 @@ bool ezal_private_run(struct EZALPrivateData* pd)
   pd->rt_ctx.create(&pd->rt_ctx);
 
   if (pd->cfg.debug) { fprintf(stdout, "starting main loop\n"); }
+  ezal_private_resize(pd);
   al_start_timer(pd->al_ctx.timer);
   while (pd->rt_ctx.is_running)
   {
-    if (pd->update(pd))
+    pd->update(pd);
+    if (pd->rt_ctx.should_redraw && al_is_event_queue_empty(pd->al_ctx.event_queue))
     {
-      pd->rt_ctx.update(&pd->rt_ctx);
-    }
-    if (pd->render(pd))
-    {
+      pd->rt_ctx.should_redraw = false;
+      pd->render(pd);
       pd->rt_ctx.render(&pd->rt_ctx);
       pd->present(pd);
     }
@@ -545,6 +540,69 @@ bool ezal_private_run(struct EZALPrivateData* pd)
   pd->rt_ctx.destroy(&pd->rt_ctx);
 
   return true;
+}
+
+void ezal_private_dump_configuration_to_stdout(struct EZALPrivateData* pd)
+{
+  #define EZALYESNO(x) (x?"YES":"NO")
+  const char* fmt = "configuration:\n"
+    "  width = %d\n"
+    "  height = %d\n"
+    "  logical width = %d\n"
+    "  logical height = %d\n"
+    "  audio samples = %d\n"
+    "  frame rate = %d\n"
+    "  fullscreen = %s\n"
+    "  auto scaling = %s\n"
+    "  stretch scaling = %s\n"
+    "  audio enabled = %s\n"
+    "  mouse enabled = %s\n"
+    "  keyboard enabled = %s\n"
+    "  debug = %s\n\n";
+
+  fprintf(
+    stdout,
+    fmt,
+    pd->cfg.width,
+    pd->cfg.height,
+    pd->cfg.logical_width,
+    pd->cfg.logical_height,
+    pd->cfg.audio_samples,
+    pd->cfg.frame_rate,
+    EZALYESNO(pd->cfg.fullscreen),
+    EZALYESNO(pd->cfg.auto_scale),
+    EZALYESNO(pd->cfg.stretch_scale),
+    EZALYESNO(pd->cfg.enable_audio),
+    EZALYESNO(pd->cfg.enable_mouse),
+    EZALYESNO(pd->cfg.enable_keyboard),
+    EZALYESNO(pd->cfg.debug));
+  #undef EZALYESNO
+}
+
+int ezal_private_adapter_start(struct EZALRuntimeAdapter* rta)
+{
+  if (!rta)
+  {
+    fprintf(stderr, "Fatal Error: rta is not a valid EZALRuntimeAdapter pointer\n");
+    exit(EXIT_FAILURE);
+  }
+
+  struct EZALPrivateData* pd = (struct EZALPrivateData*)rta->rt_ctx->_ezal_reserved;
+
+  if (!ezal_private_run(pd))
+  {
+    exit(EXIT_FAILURE);
+  }
+
+  if (!ezal_private_quit(pd))
+  {
+    exit(EXIT_FAILURE);
+  }
+
+  free(pd);
+  free(rta);
+
+  return EXIT_SUCCESS;
 }
 
 // public api functions
@@ -597,40 +655,7 @@ int ezal_start(
   struct EZALPrivateData* pd = &pd_obj;
 
   ezal_private_copy_config(cfg, &pd->cfg);
-
-  #define EZALYESNO(x) (x?"YES":"NO")
-  const char* fmt = "configuration:\n"
-    "  width = %d\n"
-    "  height = %d\n"
-    "  logical width = %d\n"
-    "  logical height = %d\n"
-    "  audio samples = %d\n"
-    "  frame rate = %d\n"
-    "  fullscreen = %s\n"
-    "  auto scaling = %s\n"
-    "  stretch scaling = %s\n"
-    "  audio enabled = %s\n"
-    "  mouse enabled = %s\n"
-    "  keyboard enabled = %s\n"
-    "  debug = %s\n\n";
-
-  fprintf(
-    stdout,
-    fmt,
-    pd->cfg.width,
-    pd->cfg.height,
-    pd->cfg.logical_width,
-    pd->cfg.logical_height,
-    pd->cfg.audio_samples,
-    pd->cfg.frame_rate,
-    EZALYESNO(pd->cfg.fullscreen),
-    EZALYESNO(pd->cfg.auto_scale),
-    EZALYESNO(pd->cfg.stretch_scale),
-    EZALYESNO(pd->cfg.enable_audio),
-    EZALYESNO(pd->cfg.enable_mouse),
-    EZALYESNO(pd->cfg.enable_keyboard),
-    EZALYESNO(pd->cfg.debug));
-  #undef EZALYESNO
+  ezal_private_dump_configuration_to_stdout(pd);
 
   if (!ezal_private_init(pd, create, destroy, update, render))
   {
@@ -654,6 +679,35 @@ int ezal_start(
   return EXIT_SUCCESS;
 }
 
+struct EZALRuntimeAdapter* ezal_init(
+  const char* title,
+  EZALFPTR create,
+  EZALFPTR destroy,
+  EZALFPTR update,
+  EZALFPTR render,
+  struct EZALConfig* cfg)
+{
+  struct EZALPrivateData* pd = (struct EZALPrivateData*)malloc(sizeof(struct EZALPrivateData));
+
+  ezal_private_copy_config(cfg, &pd->cfg);
+  ezal_private_dump_configuration_to_stdout(pd);
+
+  if (!ezal_private_init(pd, create, destroy, update, render))
+  {
+    exit(EXIT_FAILURE);
+  }
+
+  al_set_window_title(pd->al_ctx.display, title);
+
+  struct EZALRuntimeAdapter* rta = (struct EZALRuntimeAdapter*)malloc(sizeof(struct EZALRuntimeAdapter));
+
+  rta->rt_ctx = &pd->rt_ctx;
+  rta->rt_ctx->_ezal_reserved = pd;
+  rta->start = &ezal_private_adapter_start;
+
+  return rta;
+}
+
 void ezal_stop(struct EZALRuntimeContext* ctx)
 {
   if (!ctx)
@@ -661,6 +715,5 @@ void ezal_stop(struct EZALRuntimeContext* ctx)
     return;
   }
   ctx->is_running = false;
-  ctx->did_tick = false;
   ctx->should_redraw = false;
 }
