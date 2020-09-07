@@ -14,7 +14,7 @@
 
 CC := gcc
 CFLAGS ?= -DDEBUG -O0 -MMD -MP -g $(shell pkg-config \
-	allegro-5 allegro_main-5 allegro_font-5 allegro_ttf-5 \
+	allegro-5 allegro_primitives-5 allegro_font-5 allegro_ttf-5 \
 	allegro_image-5 allegro_audio-5 allegro_acodec-5 --cflags)
 .PHONY: clean
 .PHONY: install
