@@ -393,6 +393,7 @@ bool ezal_private_init_runtime(
   pd->rt_ctx.destroy = &ezal_runtime_do_nothing;
   pd->rt_ctx.update = &ezal_runtime_do_nothing;
   pd->rt_ctx.render = &ezal_runtime_do_nothing;
+  pd->rt_ctx.post_render = &ezal_runtime_do_nothing;
 
   if (create)
   {
@@ -533,6 +534,7 @@ bool ezal_private_run(struct EZALPrivateData* pd)
       pd->render(pd);
       pd->rt_ctx.render(&pd->rt_ctx);
       pd->present(pd);
+      pd->rt_ctx.post_render(&pd->rt_ctx);
     }
   }
   if (pd->cfg.debug) { fprintf(stdout, "main loop finished\n"); }

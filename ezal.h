@@ -89,6 +89,7 @@ struct EZALRuntimeContext {
   void (*destroy)(struct EZALRuntimeContext*);
   void (*update)(struct EZALRuntimeContext*);
   void (*render)(struct EZALRuntimeContext*);
+  void (*post_render)(struct EZALRuntimeContext*);
 
   void* user[EZAL_MAX_USER_DATA_PTRS];
   void* _ezal_reserved;
